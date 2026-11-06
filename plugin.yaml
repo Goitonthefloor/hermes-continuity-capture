@@ -1,0 +1,30 @@
+name: hermes-continuity-capture
+version: 0.1.0
+description: >-
+  Captures Hermes lifecycle events (session, subagent, and kanban task) as Continuity
+  schema-v2 events and writes them to a local SQLite spool file. The post_tool_call hook
+  is subscribed but, by design, is not mapped to a standalone event type, so it produces
+  no spool entry. Validated events are handed to a Continuity bridge (NATS JetStream or
+  core) that must be provided separately; the bridge and its NATS infrastructure are NOT
+  part of this plugin. Inactive by default: it only runs once the operator enables it via
+  plugins.enabled.
+author: "Rolf Greger (Goitonthefloor)"
+license: MIT
+requires_hermes: ">=0.21.5"
+tags:
+  - continuity
+  - events
+  - lifecycle
+  - observability
+  - nats
+provides_hooks:
+  - on_session_start
+  - on_session_end
+  - on_session_finalize
+  - post_tool_call
+  - subagent_start
+  - subagent_stop
+  - kanban_task_claimed
+  - kanban_task_completed
+  - kanban_task_blocked
+requires_env: []
