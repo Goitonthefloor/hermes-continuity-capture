@@ -25,8 +25,9 @@ from continuity_capture.spool import Spool
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PLUGIN_YAML = REPO_ROOT / "plugin.yaml"
 
-# The Hermes checkout that defines the authoritative hook surface. The contract test is
-# skipped when it is not present (e.g. on a fresh clone or CI without the Hermes source).
+# The Hermes checkout that defines the authoritative hook surface. Resolved from
+# $HERMES_AGENT_SOURCE / $HERMES_HOME, or a sibling checkout; the contract test is
+# skipped when no Hermes source is present (fresh clone, CI without it).
 def _hermes_plugins_py() -> pathlib.Path:
     candidates: list[pathlib.Path] = []
     source = os.environ.get("HERMES_AGENT_SOURCE") or os.environ.get("HERMES_HOME")
