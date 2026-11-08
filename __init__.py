@@ -29,7 +29,7 @@ from .continuity_capture.controller import CaptureController  # noqa: E402
 from .continuity_capture.nats_transport import build_jetstream_transport  # noqa: E402
 
 __all__ = ["register", "CaptureController"]
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 _LOCK = threading.RLock()
 _ACTIVE: Optional[CaptureController] = None

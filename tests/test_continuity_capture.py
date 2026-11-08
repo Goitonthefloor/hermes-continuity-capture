@@ -578,7 +578,13 @@ def test_plugin_yaml_declares_expected_hooks():
     if yaml is not None:
         meta = yaml.safe_load(text)
         assert meta["name"] == "hermes-continuity-capture"
-        assert meta["version"] == "0.2.0"
+        # The manifest version must stay in sync with the packaged version strings
+        # (checked instead of a hardcoded literal so a bump cannot drift silently).
+        import continuity_capture
+        root_init = (REPO_ROOT / "__init__.py").read_text(encoding="utf-8")
+        root_version = re.search(r'__version__\s*=\s*"([^"]+)"', root_init)
+        assert root_version, "no __version__ in the plugin root __init__.py"
+        assert meta["version"] == root_version.group(1) == continuity_capture.__version__
         assert set(meta["provides_hooks"]) == EXPECTED_HOOKS
         # nats_password must be declared as a secret and never as a plain value.
         assert meta["config_schema"]["nats_password"]["type"] == "secret"
