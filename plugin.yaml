@@ -1,13 +1,14 @@
 name: hermes-continuity-capture
-version: 0.1.0
+version: 0.2.0
 description: >-
   Captures Hermes lifecycle events (session, subagent, and kanban task) as Continuity
-  schema-v2 events and writes them to a local SQLite spool file. The post_tool_call hook
-  is subscribed but, by design, is not mapped to a standalone event type, so it produces
-  no spool entry. Validated events are handed to a Continuity bridge (NATS JetStream or
-  core) that must be provided separately; the bridge and its NATS infrastructure are NOT
-  part of this plugin. Inactive by default: it only runs once the operator enables it via
-  plugins.enabled.
+  schema-v2 events and writes them to a local SQLite spool file under the plugin data
+  directory. The post_tool_call hook is subscribed but, by design, is not mapped to a
+  standalone event type, so it produces no spool entry. Validated events can be handed
+  to a NATS/JetStream bridge, but only when an external NATS server is configured: the
+  default publish_mode is "spool-only" (nothing is sent, nothing fails). The NATS
+  infrastructure is NOT part of this plugin and must be deployed separately. Inactive
+  by default: it only runs once the operator enables it via plugins.enabled.
 author: "Rolf Greger (Goitonthefloor)"
 license: MIT
 requires_hermes: ">=0.21.5"
@@ -28,3 +29,79 @@ provides_hooks:
   - kanban_task_completed
   - kanban_task_blocked
 requires_env: []
+config_schema:
+  agent_id:
+    type: str
+    description: Logical agent identity; defaults to the active Hermes profile name.
+  host_identity:
+    type: str
+    description: Host identity; defaults to the runtime FQDN/hostname.
+  spool_path:
+    type: str
+    description: >-
+      SQLite spool file. Defaults to spool.db under the plugin data directory; a
+      relative path is resolved against that directory and must stay inside it.
+  publish_mode:
+    type: str
+    default: spool-only
+    description: "Delivery mode: spool-only (default), core, or jetstream."
+  spool_cap:
+    type: int
+    default: 200000
+    description: Maximum pending/accepted rows before backpressure drops the oldest.
+  retention_days:
+    type: int
+    default: 90
+    description: Age after which terminal spool rows are pruned.
+  retention_sweep_seconds:
+    type: int
+    default: 3600
+    description: Interval of the periodic retention sweep; <= 0 disables it.
+  send_retry_attempts:
+    type: int
+    default: 5
+    description: Delivery attempts before a row is given up (error rows are retried too).
+  record_full_prompts:
+    type: bool
+    default: false
+    description: Opt-in only; keep free-text prompts and tool results out of the spool.
+  exclude_tools:
+    type: list
+    description: Tool names whose post_tool_call metadata is skipped.
+  exclude_event_types:
+    type: list
+    description: Event types excluded from capture (registry-internal).
+  dedup_ttl_seconds:
+    type: int
+    default: 300
+    description: Window in which a repeated role-specific event is treated as a duplicate.
+  bridge_subject_events:
+    type: str
+    default: hermes.continuity.events
+    description: NATS subject for main events.
+  bridge_subject_quality:
+    type: str
+    default: hermes.continuity.quality
+    description: NATS subject for quality events.
+  nats_url:
+    type: str
+    default: "nats://127.0.0.1:4222"
+    description: URL of the external NATS server (only used by core/jetstream mode).
+  nats_user:
+    type: str
+    description: NATS user name (optional).
+  nats_password:
+    type: secret
+    description: NATS password. Stored via Hermes' secret route (.env); never logged.
+  nats_tls:
+    type: bool
+    default: false
+    description: Require TLS for the NATS connection.
+  jetstream_stream_name:
+    type: str
+    default: hermes_continuity
+    description: JetStream stream name to publish into (provisioned idempotently).
+  jetstream_duplicate_window_s:
+    type: int
+    default: 120
+    description: Server-side dedup window (Nats-Msg-Id = event_id).

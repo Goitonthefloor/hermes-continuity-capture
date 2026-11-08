@@ -11,10 +11,13 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional
 
-# Felder, die im Normalfall komplett verworfen werden (nicht persistiert).
+# Fields that are dropped entirely in the normal case (never persisted).
+# Free-text / potentially sensitive fields; only their length is kept as a
+# non-sensitive signal. See README ("Privacy and safety guarantees").
 _SENSITIVE_FIELDS = frozenset({
     "args", "result", "child_goal", "summary", "user_message", "conversation_history",
     "assistant_response", "error_message", "child_summary",
+    "reason", "tool_call_history",
 })
 
 # Optionale opt-in Secret-Muster (nur bei record_full_prompts oder redact_tool_payloads).

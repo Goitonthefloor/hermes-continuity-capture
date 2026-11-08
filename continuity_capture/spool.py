@@ -121,11 +121,16 @@ class Spool:
                                "WHERE event_id=?", (reason, S_INCOMPLETE, event_id))
 
     def pending_batch(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Rows to deliver: everything still owed to the bridge.
+
+        Includes ``pending`` AND ``error`` rows so a failed delivery is retried
+        (the reader/consumer side stays idempotent via the stable event_id).
+        """
         with self._lock:
             rows = self._conn.execute(
                 "SELECT event_id,event_type,payload_json,status,attempts,last_error,dedup_key "
-                "FROM spool WHERE status=? ORDER BY received_at LIMIT ?",
-                (S_PENDING, max(int(limit), 1))).fetchall()
+                "FROM spool WHERE status IN (?,?) ORDER BY received_at LIMIT ?",
+                (S_PENDING, S_ERROR, max(int(limit), 1))).fetchall()
         return [
             {"event_id": r[0], "event_type": r[1], "payload": json.loads(r[2]),
              "status": r[3], "attempts": r[4], "last_error": r[5], "dedup_key": r[6]}
@@ -166,13 +171,17 @@ class Spool:
                 "status": row[3], "created_at": row[4], "received_at": row[5]}
 
     def cleanup_retention(self, retention_days: int) -> int:
-        """Loescht accepted/done/given_up-Eintraege aelter als retention_days."""
+        """Delete terminal rows older than ``retention_days``.
+
+        ``done``/``given_up``/``accepted``/``error``/``incomplete`` age out; only
+        ``pending`` (still owed to the bridge) is kept. Uses the numeric
+        ``received_ts`` column (portable, unlike ``strftime`` on the ISO text).
+        """
         cutoff = time.time() - max(int(retention_days), 1) * 86400
         with self._lock:
             cur = self._conn.execute(
-                "DELETE FROM spool WHERE status IN (?,?,?) AND "
-                "strftime('%s', received_at) < ?",
-                (S_DONE, S_GIVEN_UP, S_ACCEPTED, int(cutoff)))
+                "DELETE FROM spool WHERE status IN (?,?,?,?,?) AND received_ts < ?",
+                (S_DONE, S_GIVEN_UP, S_ACCEPTED, S_ERROR, S_INCOMPLETE, cutoff))
             return cur.rowcount
 
     def _groom_locked(self) -> None:
