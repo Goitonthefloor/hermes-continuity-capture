@@ -23,4 +23,4 @@ __all__ = [
     "NatsClient", "NatsError",
     "JetStream", "NatsTransport", "TransportOutcome", "build_jetstream_transport",
 ]
-__version__ = "0.2.1"
+__version__ = "0.2.2"

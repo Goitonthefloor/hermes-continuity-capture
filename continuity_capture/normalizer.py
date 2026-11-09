@@ -110,7 +110,8 @@ def normalize(hook: str, kwargs: Mapping[str, Any], *, agent_id: str,
     turn_id = p.get("turn_id") or None
 
     # --- Datenschutz: Redaction/Data-Minimierung VOR INSERT (B-08) ---
-    payload_meta = redact.apply({k: v for k, v in p.items()}, keep_verbose=False)
+    # Free-text fields are dropped here; there is no setting that keeps them.
+    payload_meta = redact.apply({k: v for k, v in p.items()})
 
     # --- Runtime-Identitaet ---
     if hook == "subagent_stop":

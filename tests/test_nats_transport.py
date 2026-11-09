@@ -198,6 +198,24 @@ def test_client_connects_without_credentials():
         client.close()
 
 
+def test_tls_scheme_is_accepted_and_implies_tls():
+    """``tls://`` is stripped like ``nats://`` and switches TLS on."""
+    client = NatsClient("tls://nats.invalid:4333")
+    assert client._parse_url(client.url) == ("nats.invalid", 4333)
+    assert client._use_tls is True
+    # Without the scheme the flag alone decides.
+    plain = NatsClient("nats://nats.invalid:4222")
+    assert plain._parse_url(plain.url) == ("nats.invalid", 4222)
+    assert plain._use_tls is False
+    assert NatsClient("nats://nats.invalid:4222", tls=True)._use_tls is True
+
+
+def test_tls_scheme_default_port():
+    client = NatsClient("tls://nats.invalid")
+    assert client._parse_url(client.url) == ("nats.invalid", 4222)
+    assert client._use_tls is True
+
+
 def test_core_publish_wire_format():
     with DummyNats() as dummy:
         client = NatsClient(dummy.url, connect_timeout=2.0)

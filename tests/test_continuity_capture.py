@@ -91,7 +91,7 @@ def test_load_config_defaults():
     assert cfg.spool_cap == 200_000
     assert cfg.retention_days == 90
     assert cfg.dedup_ttl_seconds == 300
-    assert cfg.record_full_prompts is False
+    assert not hasattr(cfg, "record_full_prompts")  # no opt-in for free text
     assert cfg.exclude_tools == set()
     assert cfg.exclude_event_types == set()
     assert cfg.agent_id is None                   # resolved from the profile at runtime
@@ -117,12 +117,10 @@ def test_load_config_applies_overrides():
         "spool_path": "/tmp/example.db",
         "spool_cap": 5,
         "exclude_tools": ["run_shell"],
-        "record_full_prompts": True,
     })
     assert cfg.spool_path == "/tmp/example.db"
     assert cfg.spool_cap == 5
     assert cfg.exclude_tools == {"run_shell"}
-    assert cfg.record_full_prompts is True
 
 
 def test_load_config_reads_new_bridge_keys():
@@ -146,7 +144,6 @@ def test_load_config_reads_new_bridge_keys():
 def test_load_config_coerces_boolean_strings():
     assert load_config({"nats_tls": "yes"}).nats_tls is True
     assert load_config({"nats_tls": "false"}).nats_tls is False
-    assert load_config({"record_full_prompts": "1"}).record_full_prompts is True
 
 
 # ------------------------------------------------------------------- spool path (Req 2)
@@ -316,9 +313,14 @@ def test_redact_len_of_handles_non_sized_values():
     assert redact._len_of([1, 2, 3]) == 3
 
 
-def test_redact_keep_verbose_masks_secret_keywords():
-    out = redact.apply({"note": "token abc123"}, keep_verbose=True)
-    assert "***" in out["note"]
+def test_redact_apply_drops_free_text_and_has_no_opt_in():
+    import inspect
+    out = redact.apply({"note": "plain metadata", "args": {"x": "secret-value"},
+                        "user_message": "hello"})
+    assert out["note"] == "plain metadata"      # ordinary metadata passes through
+    assert "args" not in out and "user_message" not in out
+    assert out["omitted_fields"]["args"] == 1   # length only, never the content
+    assert "keep_verbose" not in inspect.signature(redact.apply).parameters
 
 
 # ---------------------------------------------------------------------------- spool
@@ -588,6 +590,13 @@ def test_plugin_yaml_declares_expected_hooks():
         assert set(meta["provides_hooks"]) == EXPECTED_HOOKS
         # nats_password must be declared as a secret and never as a plain value.
         assert meta["config_schema"]["nats_password"]["type"] == "secret"
+        # ...and its env name must match what __init__.py reads (no drift, #150244).
+        root_init_text = (REPO_ROOT / "__init__.py").read_text(encoding="utf-8")
+        env_name = re.search(r'NATS_PASSWORD_ENV\s*=\s*"([^"]+)"', root_init_text)
+        assert env_name, "NATS_PASSWORD_ENV missing in the plugin root __init__.py"
+        assert meta["config_schema"]["nats_password"]["env"] == env_name.group(1)
+        # Free-text retention is deliberately not configurable.
+        assert "record_full_prompts" not in meta["config_schema"]
         assert meta["config_schema"]["publish_mode"]["default"] == "spool-only"
     else:
         # PyYAML unavailable -> minimal text assertion.

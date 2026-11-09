@@ -198,3 +198,39 @@ def test_agent_id_falls_back_to_default_when_profile_empty(plugin, tmp_path):
     ctx = FakeCtx({}, data_dir=tmp_path / "data", profile_name="")
     plugin.register(ctx)
     assert "agent_id=default" in ctx.commands["continuity-capture"]("status")
+
+
+# ----------------------------------------------------------- Req 3 (secret route)
+def test_nats_password_comes_from_the_secret_route(plugin, monkeypatch, tmp_path):
+    """The declared secret field is read through the secret scope, not get_config."""
+    seen = {}
+
+    fake_scope = types.ModuleType("agent.secret_scope")
+
+    def _fake_get_secret(name, default=None):
+        seen["name"] = name
+        return "s3cr3t-value" if name == plugin.NATS_PASSWORD_ENV else default
+
+    setattr(fake_scope, "get_secret", _fake_get_secret)
+    fake_agent = types.ModuleType("agent")
+    setattr(fake_agent, "secret_scope", fake_scope)
+    monkeypatch.setitem(sys.modules, "agent", fake_agent)
+    monkeypatch.setitem(sys.modules, "agent.secret_scope", fake_scope)
+
+    ctx = FakeCtx({"nats_password": "plaintext-in-config"}, data_dir=tmp_path / "data")
+    conf, password = plugin._read_settings(ctx)
+
+    assert seen["name"] == "HERMES_CONTINUITY_CAPTURE_NATS_PASSWORD"
+    assert password == "s3cr3t-value"
+    assert "nats_password" not in conf
+
+
+def test_nats_password_is_never_taken_from_config(plugin, monkeypatch, tmp_path):
+    """Without a secret route the password stays empty; config.yaml is not consulted."""
+    monkeypatch.setitem(sys.modules, "agent", None)
+    monkeypatch.setitem(sys.modules, "agent.secret_scope", None)
+
+    ctx = FakeCtx({"nats_password": "plaintext-in-config"}, data_dir=tmp_path / "data")
+    _conf, password = plugin._read_settings(ctx)
+
+    assert password is None

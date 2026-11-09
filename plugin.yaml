@@ -1,5 +1,5 @@
 name: hermes-continuity-capture
-version: 0.2.1
+version: 0.2.2
 description: >-
   Captures Hermes lifecycle events (session, subagent, and kanban task) as Continuity
   schema-v2 events and writes them to a local SQLite spool file under the plugin data
@@ -61,10 +61,6 @@ config_schema:
     type: int
     default: 5
     description: Delivery attempts before a row is given up (error rows are retried too).
-  record_full_prompts:
-    type: bool
-    default: false
-    description: Opt-in only; keep free-text prompts and tool results out of the spool.
   exclude_tools:
     type: list
     description: Tool names whose post_tool_call metadata is skipped.
@@ -86,17 +82,22 @@ config_schema:
   nats_url:
     type: str
     default: "nats://127.0.0.1:4222"
-    description: URL of the external NATS server (only used by core/jetstream mode).
+    description: >-
+      URL of the external NATS server (only used by core/jetstream mode). A tls://
+      scheme enables TLS as well.
   nats_user:
     type: str
     description: NATS user name (optional).
   nats_password:
     type: secret
+    env: HERMES_CONTINUITY_CAPTURE_NATS_PASSWORD
     description: NATS password. Stored via Hermes' secret route (.env); never logged.
   nats_tls:
     type: bool
     default: false
-    description: Require TLS for the NATS connection.
+    description: >-
+      Require TLS for the NATS connection. Turn this on for every nats_url that is not
+      loopback; without TLS the NATS user and password travel in plaintext.
   jetstream_stream_name:
     type: str
     default: hermes_continuity

@@ -52,7 +52,8 @@ class CaptureConfig:
     jetstream_duplicate_window_s: int = DEFAULT_JETSTREAM_DUPLICATE_WINDOW_S
 
     # --- Privacy / redaction (B-08: applied BEFORE the SQLite INSERT) --------
-    record_full_prompts: bool = False              # opt-in only
+    # Free-text fields are always dropped; there is deliberately no setting that
+    # would store them (see README "Privacy and safety guarantees").
     exclude_tools: set = field(default_factory=set)
     exclude_event_types: set = field(default_factory=set)
 
@@ -144,8 +145,6 @@ def load_config(conf: dict | None, *, data_dir: Optional[Path | str] = None) -> 
         for key in ("exclude_tools", "exclude_event_types"):
             if isinstance(conf.get(key), (list, set, tuple)):
                 setattr(cfg, key, set(conf[key]))
-        if conf.get("record_full_prompts") is not None:
-            cfg.record_full_prompts = _as_bool(conf["record_full_prompts"])
         cfg.nats_tls = _as_bool(cfg.nats_tls)
 
     # publish_mode canalization

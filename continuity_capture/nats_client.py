@@ -42,6 +42,7 @@ class NatsClient:
         self.connect_timeout = connect_timeout
         self.verbose = verbose
         self.tls = bool(tls)
+        self._scheme_tls = False  # set by _parse_url when the URL says tls://
         self._sock: Optional[socket.socket] = None
         self._subs: Dict[str, str] = {}  # inbox -> sid
         self._sid = 0
@@ -53,7 +54,7 @@ class NatsClient:
             raise NatsError("empty NATS url")
         host, port = self._parse_url(self.url)
         raw = socket.create_connection((host, port), timeout=self.connect_timeout)
-        if self.tls:
+        if self._use_tls:
             import ssl
             context = ssl.create_default_context()
             raw = context.wrap_socket(raw, server_hostname=host)
@@ -66,15 +67,25 @@ class NatsClient:
         self._pump_until_pong()
 
     def _parse_url(self, url: str) -> tuple:
-        rest = url
-        if rest.startswith("nats://"):
-            rest = rest[len("nats://"):]
+        """Split ``host[:port]`` off the URL; a ``tls://`` scheme implies TLS."""
+        rest = str(url).strip()
+        for scheme, scheme_tls in (("nats://", False), ("tls://", True)):
+            if rest.lower().startswith(scheme):
+                rest = rest[len(scheme):]
+                if scheme_tls:
+                    self._scheme_tls = True
+                break
         if "/" in rest:
             rest = rest.split("/", 1)[0]
         if ":" in rest:
             h, p = rest.rsplit(":", 1)
             return h, int(p)
         return rest, 4222
+
+    @property
+    def _use_tls(self) -> bool:
+        """TLS when the setting asks for it or the URL scheme said ``tls://``."""
+        return bool(self.tls or self._scheme_tls)
 
     def _readline_info(self) -> str:
         return self._readline()
@@ -89,7 +100,7 @@ class NatsClient:
         cfg = {
             "verbose": False,
             "pedantic": False,
-            "tls_required": self.tls,
+            "tls_required": self._use_tls,
             "name": self.name,
             "lang": "py",
             "version": "0.1.0",

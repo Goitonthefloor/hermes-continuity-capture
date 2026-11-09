@@ -66,21 +66,29 @@ invalid `publish_mode` fails loading with a `ValueError`.
 | `retention_days` | `90` | Age after which terminal spool rows (including `error` rows) are pruned. |
 | `retention_sweep_seconds` | `3600` | Interval of the periodic retention sweep; `<= 0` disables it. The sweep also runs once at startup. |
 | `send_retry_attempts` | `5` | Delivery attempts before a row is given up. `error` rows are retried too. |
-| `record_full_prompts` | `false` | Opt-in only. Leave `false` to keep free-text prompts and tool results out of the spool. |
 | `exclude_tools` | `{}` | Tool names for which `post_tool_call` metadata is skipped. |
 | `exclude_event_types` | `{}` | Event types excluded from capture. |
 | `dedup_ttl_seconds` | `300` | Window in which a repeated role-specific event is treated as a duplicate. |
 | `bridge_subject_events` | `hermes.continuity.events` | NATS subject for main events. |
 | `bridge_subject_quality` | `hermes.continuity.quality` | NATS subject for quality events. |
-| `nats_url` | `nats://127.0.0.1:4222` | URL of the external NATS server (used by `core`/`jetstream` only). |
+| `nats_url` | `nats://127.0.0.1:4222` | URL of the external NATS server (used by `core`/`jetstream` only); a `tls://` scheme also enables TLS. |
 | `nats_user` | – | NATS user name (optional). |
-| `nats_password` | – | NATS password. Declared as a `secret` in `plugin.yaml`, so it is resolved through Hermes' secret route (the plugin never reads `.env` files itself) and never logged or echoed in errors. |
+| `nats_password` | – | NATS password. Declared as a `secret` in `plugin.yaml` with `env: HERMES_CONTINUITY_CAPTURE_NATS_PASSWORD`, so it is resolved through Hermes' secret route (the plugin never reads credential files itself) and never logged or echoed in errors. |
 | `nats_tls` | `false` | Require TLS for the NATS connection. |
 | `jetstream_stream_name` | `hermes_continuity` | JetStream stream to publish into (provisioned idempotently). |
 | `jetstream_duplicate_window_s` | `120` | Server-side dedup window; each event carries `Nats-Msg-Id = <event_id>`. |
 
 The spool lives under the plugin's own data directory (`ctx.state.data_dir`), not in the
 process working directory.
+
+### NATS transport and TLS
+
+`nats_password` is a secret: it is only read from the environment variable
+`HERMES_CONTINUITY_CAPTURE_NATS_PASSWORD` (Hermes stores the value there when the field
+is saved in the plugin's settings form), never from `config.yaml` and never from a
+credential file. Set `nats_tls: true` for every `nats_url` that is not loopback —
+without TLS the NATS user and password travel in plaintext. A `tls://host:4222` URL
+enables TLS as well, so the flag and the scheme are interchangeable.
 
 ## Commands
 
@@ -102,7 +110,8 @@ list is rejected before it reaches the spool.
   free-text fields `user_message`, `result`, `args`, `summary`, `reason`, and
   `tool_call_history` are dropped by default; only their length is kept as a
   non-sensitive signal in `omitted_fields`.
-- Full prompts and tool results are never stored unless `record_full_prompts` is explicitly enabled.
+- Free-text fields are always dropped; there is deliberately no setting that would keep
+  prompts or tool results in the spool.
 - Runtime identity is a deterministic UUIDv5 derived from agent, host, process, and start
   time; IDs are never invented. If the required inputs are missing, no ID is produced and
   the event is marked incomplete instead.

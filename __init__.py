@@ -29,17 +29,23 @@ from .continuity_capture.controller import CaptureController  # noqa: E402
 from .continuity_capture.nats_transport import build_jetstream_transport  # noqa: E402
 
 __all__ = ["register", "CaptureController"]
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 _LOCK = threading.RLock()
 _ACTIVE: Optional[CaptureController] = None
 
+# Environment variable the ``nats_password`` secret field is stored under. Declared
+# explicitly as ``env:`` in plugin.yaml, so the manifest and this reader can never
+# drift apart; read through ``agent.secret_scope.get_secret`` (catalog rule 11).
+NATS_PASSWORD_ENV = "HERMES_CONTINUITY_CAPTURE_NATS_PASSWORD"
+
 # Every plugin setting is read individually through PluginContext.get_config; an
-# unset key keeps the module default. ``nats_password`` is read separately (see below).
+# unset key keeps the module default. ``nats_password`` is a secret and is read
+# from the secret route instead (see NATS_PASSWORD_ENV).
 _SETTING_KEYS = (
     "spool_path", "publish_mode", "spool_cap", "retention_days",
     "send_retry_attempts", "send_retry_base_delay_s", "send_max_backoff_s",
-    "record_full_prompts", "exclude_tools", "exclude_event_types",
+    "exclude_tools", "exclude_event_types",
     "dedup_ttl_seconds", "agent_id", "host_identity",
     "bridge_subject_events", "bridge_subject_quality",
     "nats_url", "nats_user", "nats_tls",
@@ -78,13 +84,12 @@ def _read_settings(ctx: Any) -> Tuple[dict, Optional[str]]:
     parsed out of ``.env`` files here and never logged.
     """
     conf = {key: _get_config(ctx, key, None) for key in _SETTING_KEYS}
-    password = _get_config(ctx, "nats_password", None)
-    if not password:
-        try:
-            from agent.secret_scope import get_secret
-            password = get_secret("NATS_PASSWORD")
-        except Exception:  # noqa: BLE001 — no secret route available
-            password = None
+    password = None
+    try:
+        from agent.secret_scope import get_secret
+        password = get_secret(NATS_PASSWORD_ENV) or None
+    except Exception:  # noqa: BLE001 — no secret route available
+        password = None
     return conf, password
 
 
